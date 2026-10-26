@@ -8,28 +8,46 @@ for (const [caseName, booking] of Object.entries(bookingData)) {
   }) => {
     const bookerClient = new BookerClient(request);
 
-    const authResponse = await bookerClient.createToken("admin", "password123");
+    const authBody =
+      await test.step("POST /auth: authenticate for the booking journey", async () => {
+        const authResponse = await bookerClient.createToken(
+          "admin",
+          "password123",
+        );
 
-    expect(authResponse.status(), "Authentication returns HTTP 200").toBe(200);
+        expect(authResponse.status(), "Authentication returns HTTP 200").toBe(
+          200,
+        );
 
-    const authBody = await authResponse.json();
+        const credentials = await authResponse.json();
 
-    expect(authBody.token, "Authentication returns a non-empty token").toEqual(
-      expect.any(String),
-    );
-    expect(authBody.token.trim(), "Authentication token is not blank").not.toBe(
-      "",
-    );
+        expect(credentials.token, "Authentication returns a token").toEqual(
+          expect.any(String),
+        );
 
-    const response = await bookerClient.createBooking(booking);
+        expect(
+          credentials.token.trim(),
+          "Authentication token is not blank",
+        ).not.toBe("");
 
-    expect(response.status(), "Create booking returns HTTP 200").toBe(200);
+        return credentials;
+      });
 
-    const body = await response.json();
+    const body =
+      await test.step("POST /booking: create a booking and obtain its ID", async () => {
+        const response = await bookerClient.createBooking(booking);
 
-    expect(body.bookingid, "Created booking has a numeric ID").toEqual(
-      expect.any(Number),
-    );
+        expect(response.status(), "Create booking returns HTTP 200").toBe(200);
+
+        const createdBooking = await response.json();
+
+        expect(
+          createdBooking.bookingid,
+          "Created booking has a numeric ID",
+        ).toEqual(expect.any(Number));
+
+        return createdBooking;
+      });
 
     try {
       expect(
@@ -37,29 +55,36 @@ for (const [caseName, booking] of Object.entries(bookingData)) {
         "Created booking matches the supplied details",
       ).toEqual(booking);
 
-      const getResponse = await bookerClient.getBooking(body.bookingid);
+      await test.step("GET /booking/{id}: verify the saved booking", async () => {
+        const getResponse = await bookerClient.getBooking(body.bookingid);
 
-      expect(
-        getResponse.status(),
-        "Read created booking returns HTTP 200",
-      ).toBe(200);
+        expect(
+          getResponse.status(),
+          "Read created booking returns HTTP 200",
+        ).toBe(200);
 
-      const savedBooking = await getResponse.json();
+        const savedBooking = await getResponse.json();
 
-      expect(
-        savedBooking,
-        "Stored booking matches the supplied details",
-      ).toEqual(booking);
-      const listResponse = await bookerClient.getBookingIds();
+        expect(
+          savedBooking,
+          "Stored booking matches the supplied details",
+        ).toEqual(booking);
+      });
 
-      expect(listResponse.status(), "List bookings returns HTTP 200").toBe(200);
+      await test.step("GET /booking: find the created booking in the list", async () => {
+        const listResponse = await bookerClient.getBookingIds();
 
-      const bookingIds = await listResponse.json();
+        expect(listResponse.status(), "List bookings returns HTTP 200").toBe(
+          200,
+        );
 
-      expect(
-        bookingIds,
-        "Booking list contains the booking created by this test",
-      ).toEqual(expect.arrayContaining([{ bookingid: body.bookingid }]));
+        const bookingIds = await listResponse.json();
+
+        expect(
+          bookingIds,
+          "Booking list contains the booking created by this test",
+        ).toEqual(expect.arrayContaining([{ bookingid: body.bookingid }]));
+      });
 
       const updatedBooking = {
         ...booking,
@@ -68,112 +93,124 @@ for (const [caseName, booking] of Object.entries(bookingData)) {
         depositpaid: !booking.depositpaid,
       };
 
-      const rejectedUpdateResponse = await bookerClient.updateBooking(
-        body.bookingid,
-        updatedBooking,
-        "invalid-token",
-      );
+      await test.step("PUT /booking/{id}: reject an invalid token without changing data", async () => {
+        const rejectedUpdateResponse = await bookerClient.updateBooking(
+          body.bookingid,
+          updatedBooking,
+          "invalid-token",
+        );
 
-      expect(
-        rejectedUpdateResponse.status(),
-        "Update with an invalid token is forbidden",
-      ).toBe(403);
+        expect(
+          rejectedUpdateResponse.status(),
+          "Update with an invalid token is forbidden",
+        ).toBe(403);
 
-      const unchangedResponse = await bookerClient.getBooking(body.bookingid);
+        const unchangedResponse = await bookerClient.getBooking(body.bookingid);
 
-      expect(
-        unchangedResponse.status(),
-        "Booking remains readable after the rejected update",
-      ).toBe(200);
+        expect(
+          unchangedResponse.status(),
+          "Booking remains readable after the rejected update",
+        ).toBe(200);
 
-      expect(
-        await unchangedResponse.json(),
-        "Rejected update leaves the original booking unchanged",
-      ).toEqual(booking);
+        expect(
+          await unchangedResponse.json(),
+          "Rejected update leaves the original booking unchanged",
+        ).toEqual(booking);
+      });
 
-      const updateResponse = await bookerClient.updateBooking(
-        body.bookingid,
-        updatedBooking,
-        authBody.token,
-      );
+      await test.step("PUT /booking/{id}: update and verify persistence", async () => {
+        const updateResponse = await bookerClient.updateBooking(
+          body.bookingid,
+          updatedBooking,
+          authBody.token,
+        );
 
-      expect(updateResponse.status(), "Update booking returns HTTP 200").toBe(
-        200,
-      );
+        expect(updateResponse.status(), "Update booking returns HTTP 200").toBe(
+          200,
+        );
 
-      const updateBody = await updateResponse.json();
+        const updateBody = await updateResponse.json();
 
-      expect(
-        updateBody,
-        "Update response contains the updated details",
-      ).toEqual(updatedBooking);
+        expect(
+          updateBody,
+          "Update response contains the updated details",
+        ).toEqual(updatedBooking);
 
-      const updatedGetResponse = await bookerClient.getBooking(body.bookingid);
+        const updatedGetResponse = await bookerClient.getBooking(
+          body.bookingid,
+        );
 
-      expect(
-        updatedGetResponse.status(),
-        "Read updated booking returns HTTP 200",
-      ).toBe(200);
+        expect(
+          updatedGetResponse.status(),
+          "Read updated booking returns HTTP 200",
+        ).toBe(200);
 
-      expect(
-        await updatedGetResponse.json(),
-        "Stored booking contains the updated details",
-      ).toEqual(updatedBooking);
+        expect(
+          await updatedGetResponse.json(),
+          "Stored booking contains the updated details",
+        ).toEqual(updatedBooking);
+      });
 
-      const patch = {
-        additionalneeds: "Extra pillows",
-      };
+      await test.step("PATCH /booking/{id}: change one field and preserve the others", async () => {
+        const patch = {
+          additionalneeds: "Extra pillows",
+        };
 
-      const patchResponse = await bookerClient.partialUpdateBooking(
-        body.bookingid,
-        patch,
-        authBody.token,
-      );
+        const patchResponse = await bookerClient.partialUpdateBooking(
+          body.bookingid,
+          patch,
+          authBody.token,
+        );
 
-      expect(patchResponse.status(), "Partial update returns HTTP 200").toBe(
-        200,
-      );
+        expect(patchResponse.status(), "Partial update returns HTTP 200").toBe(
+          200,
+        );
 
-      const expectedAfterPatch = {
-        ...updatedBooking,
-        ...patch,
-      };
+        const expectedAfterPatch = {
+          ...updatedBooking,
+          ...patch,
+        };
 
-      expect(
-        await patchResponse.json(),
-        "Partial update changes additional needs and preserves other fields",
-      ).toEqual(expectedAfterPatch);
+        expect(
+          await patchResponse.json(),
+          "Partial update changes additional needs and preserves other fields",
+        ).toEqual(expectedAfterPatch);
 
-      const patchedGetResponse = await bookerClient.getBooking(body.bookingid);
+        const patchedGetResponse = await bookerClient.getBooking(
+          body.bookingid,
+        );
 
-      expect(
-        patchedGetResponse.status(),
-        "Read partially updated booking returns HTTP 200",
-      ).toBe(200);
+        expect(
+          patchedGetResponse.status(),
+          "Read partially updated booking returns HTTP 200",
+        ).toBe(200);
 
-      expect(
-        await patchedGetResponse.json(),
-        "Stored booking preserves the partial update and all other fields",
-      ).toEqual(expectedAfterPatch);
+        expect(
+          await patchedGetResponse.json(),
+          "Stored booking preserves the partial update and all other fields",
+        ).toEqual(expectedAfterPatch);
+      });
     } finally {
-      const deleteResponse = await bookerClient.deleteBooking(
-        body.bookingid,
-        authBody.token,
-      );
+      await test.step("DELETE /booking/{id}: delete and confirm it is absent", async () => {
+        const deleteResponse = await bookerClient.deleteBooking(
+          body.bookingid,
+          authBody.token,
+        );
 
-      expect(
-        deleteResponse.status(),
-        "Cleanup deletes the created booking",
-      ).toBe(201);
+        expect(
+          deleteResponse.status(),
+          "Cleanup deletes the created booking",
+        ).toBe(201);
 
-      const deletedBookingResponse = await bookerClient.getBooking(
-        body.bookingid,
-      );
+        const deletedBookingResponse = await bookerClient.getBooking(
+          body.bookingid,
+        );
 
-      expect(
-        deletedBookingResponse.status(),
-        "Deleted booking can no longer be retrieved",
-      ).toBe(404);
+        expect(
+          deletedBookingResponse.status(),
+          "Deleted booking can no longer be retrieved",
+        ).toBe(404);
+      });
     }
   });
 }
