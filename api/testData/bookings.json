@@ -1,0 +1,24 @@
+{
+  "standardBooking": {
+    "firstname": "Ana",
+    "lastname": "Tester",
+    "totalprice": 150,
+    "depositpaid": true,
+    "bookingdates": {
+      "checkin": "2027-03-10",
+      "checkout": "2027-03-12"
+    },
+    "additionalneeds": "Breakfast"
+  },
+  "bookingWithoutDeposit": {
+    "firstname": "Alex",
+    "lastname": "Reader",
+    "totalprice": 80,
+    "depositpaid": false,
+    "bookingdates": {
+      "checkin": "2027-04-05",
+      "checkout": "2027-04-06"
+    },
+    "additionalneeds": "Late arrival"
+  }
+}
