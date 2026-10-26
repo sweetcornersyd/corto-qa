@@ -1,17 +1,19 @@
-import { type Locator, type Page } from '@playwright/test';
-import pageUrls from '../testData/page-urls';
+import { type Locator, type Page } from "@playwright/test";
+import pageUrls from "../testData/page-urls";
 
 export class BooksPage {
   readonly searchInput: Locator;
   readonly bookTitles: Locator;
 
   constructor(private readonly page: Page) {
-    this.searchInput = page.getByPlaceholder('Type to search');
-    this.bookTitles = page.getByRole('table').getByRole('link');
+    this.searchInput = page.getByPlaceholder("Type to search");
+    this.bookTitles = page.getByRole("table").getByRole("link");
   }
 
   async open() {
-    await this.page.goto(pageUrls.booksUrl);
+    await this.page.goto(pageUrls.booksUrl, {
+      waitUntil: "domcontentloaded",
+    });
   }
 
   async searchFor(term: string) {
@@ -27,8 +29,6 @@ export class BooksPage {
   }
 
   async clickTitleHeader() {
-    await this.page
-      .getByRole('columnheader', { name: 'Title'})
-      .click();
+    await this.page.getByRole("columnheader", { name: "Title" }).click();
   }
 }
